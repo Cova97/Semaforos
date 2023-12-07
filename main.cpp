@@ -13,6 +13,9 @@ mutex mtx;
 // Variable compartida que representa el estado del semáforo
 bool green_light = false;
 
+// Variable global para contar peatones
+int pedestrian_count = 0;
+
 // Descriptores de tubería para la comunicación con carros y peatones
 int car_pipe[2];
 int pedestrian_pipe[2];
@@ -34,16 +37,25 @@ void traffic_light() {
 
         // Cambia la luz
         green_light = !green_light;
+        
+        // Obtiene y muestra el directorio de trabajo actual
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != NULL) {
+            cout << "Directorio actual: " << cwd << endl;
+        } else {
+            cerr << "Error al obtener el directorio actual" << endl;
+        }
 
         // Libera el semáforo
         sem_post(&semaphore_light);
 
         // Imprime el estado actual de la luz
         sem_wait(&semaphore_print);
+        cout << "Semáforo:\n";
         if (green_light) {
-            cout << "Semáforo: Luz verde\n";
+            cout << "[1]\n[0]\n";
         } else {
-            cout << "Semáforo: Luz roja\n";
+            cout << "[O]\n[1]\n";
         }
         sem_post(&semaphore_print);
     }
@@ -73,18 +85,24 @@ void car(int id) {
 
 // Función que simula el comportamiento de un peatón
 void pedestrian() {
+    int current_index;
+    {
+        lock_guard<mutex> guard(mtx);
+        current_index = ++pedestrian_count;
+    }
+
     while (true) {
         // Espera la luz roja antes de cruzar
         sem_wait(&semaphore_light);
         if (!green_light) {
             sem_post(&semaphore_light);  // Libera el semáforo antes de imprimir
             sem_wait(&semaphore_print);
-            cout << "Peatón: Cruza la calle\n";
+            cout << "Peatón " << current_index << ": Cruza la calle\n";
             sem_post(&semaphore_print);
         } else {
             sem_post(&semaphore_light);  // Libera el semáforo sin imprimir
             sem_wait(&semaphore_print);
-            cout << "Peatón: Esperando luz roja para cruzar\n";
+            cout << "Peatón " << current_index << ": Esperando luz roja para cruzar\n";
             sem_post(&semaphore_print);
         }
 
@@ -94,6 +112,13 @@ void pedestrian() {
 }
 
 int main() {
+    // Cambiar el directorio de trabajo a uno específico
+    const char* nuevoDirectorio = "/Users/aldocovamartinez/Desktop/Semaforo/Semaforo";
+    if (chdir(nuevoDirectorio) != 0) {
+        cerr << "Error al cambiar el directorio de trabajo" << endl;
+        return 1;
+    }
+    
     int num_cars, num_pedestrians;
 
     // Solicitar al usuario que ingrese el número de carros y peatones
